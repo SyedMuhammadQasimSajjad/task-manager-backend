@@ -6,9 +6,6 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
-// Frontend files serve karne ke liye perfect tareeqa
-app.use(express.static(path.join(__dirname, '.')));
-
 // 🔗 MongoDB Connection String
 const mongoURI = "mongodb+srv://syedmuhammadqasimsajjad3_db_user:dA8zgkfJ6RqWL7sp@cluster0.jsgxpq2.mongodb.net/task_manager?retryWrites=true&w=majority&appName=Cluster0";
 
@@ -16,19 +13,39 @@ mongoose.connect(mongoURI)
     .then(() => console.log("MongoDB Cloud se connection fit ho gaya hai! 🔥"))
     .catch((err) => console.log("Database connection mein masla aya:", err));
 
-// 📝 MongoDB Task Schema aur Model (Kachra Array ki jagah Real DB!)
+// 📝 MongoDB Task Schema aur Model
 const TaskSchema = new mongoose.Schema({
     title: String,
     priority: String
 });
 const Task = mongoose.model('Task', TaskSchema);
 
-// 🌍 Main Route (Frontend file explicitly serve karne ke liye)
+// ==========================================
+// 🌍 FRONTEND MANUAL ROUTES (Bulletproof!)
+// ==========================================
+
+// 🏠 1. HTML Route (Space bilkul saaf kar di hai!)
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// 🔄 API Routes (Real MongoDB ke sath)
+// 🎨 2. CSS Route (MIME type ke sath)
+app.get('/style.css', (req, res) => {
+    res.setHeader('Content-Type', 'text/css');
+    res.sendFile(path.join(__dirname, 'style.css'));
+});
+
+// ⚡ 3. JavaScript Route (MIME type ke sath)
+app.get('/index.js', (req, res) => {
+    res.setHeader('Content-Type', 'application/javascript');
+    res.sendFile(path.join(__dirname, 'index.js'));
+});
+
+
+// ==========================================
+// 🔄 BACKEND API ROUTES
+// ==========================================
+
 app.get('/api/tasks', async (req, res) => {
     try {
         const tasks = await Task.find();

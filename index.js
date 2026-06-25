@@ -8,7 +8,16 @@ let pendingTaskText = "";
 
 const API_URL = "/api/tasks";
 
-// 1. Add Task Button logic
+// 🕒 1. Live Date Function (Audit Fix: Real-time Date format)
+function updateLiveDate() {
+    const dateElement = document.getElementById("current-date");
+    if (dateElement) {
+        const options = { year: 'numeric', month: 'long', day: 'numeric' };
+        dateElement.innerText = new Date().toLocaleDateString('en-US', options);
+    }
+}
+
+// Add Task Button logic
 function addTask() {
     const taskValue = taskInput.value.trim();
 
@@ -26,7 +35,7 @@ if(closeModalBtn) {
     });
 }
 
-// 2. Priority buttons trigger
+// Priority buttons trigger
 document.querySelectorAll(".p-btn").forEach(btn => {
     btn.addEventListener("click", () => {
         const selectedPriority = btn.getAttribute("data-p");
@@ -34,7 +43,7 @@ document.querySelectorAll(".p-btn").forEach(btn => {
     });
 });
 
-// 3. Save Task to Server
+// Save Task to Server
 function finalizeTask(priority) {
     const taskData = {
         title: pendingTaskText,
@@ -58,7 +67,7 @@ function finalizeTask(priority) {
         .catch(err => console.log(err));
 }
 
-// 4. Render UI (🛠️ Fail-Proof Target Listening)
+// Render UI
 function renderTask() {
     taskList.innerHTML = "";
     const filteredTasks = tasks.filter(task => {
@@ -79,25 +88,45 @@ function renderTask() {
             <i class="fa-solid fa-trash delete-icon"></i>
         `;
 
-        // 🎯 Direct Checkbox Listener: Jab element banega, listener direct lag jayega
+        // 🎯 Lag Fix: Direct Checkbox change handler (UI updates instantly without full server reload loop)
         const checkbox = taskCard.querySelector(".task-check");
         checkbox.addEventListener("change", (e) => {
-            console.log("🎯 Checkbox Changed Directly! State:", e.target.checked);
-            toggleTaskOnServer(task._id, e.target.checked);
+            const isChecked = e.target.checked;
+
+            // Local state ko foran update karo taake stuck na ho
+            task.completed = isChecked;
+            if (isChecked) {
+                taskCard.classList.add("completed");
+            } else {
+                taskCard.classList.remove("completed");
+            }
+
+            // Progress stats recalculate karo smoothly
+            calculateStats();
+
+            // Backend par chupke se save karwao background mein
+            toggleTaskOnServer(task._id, isChecked);
         });
 
-        // 🗑️ Direct Trash Listener
+        // Direct Trash Listener
         const deleteIcon = taskCard.querySelector(".delete-icon");
         deleteIcon.addEventListener("click", () => {
+            // Local array se mitao foran fast feedback ke liye
+            tasks = tasks.filter(t => t._id !== task._id);
+            renderTask();
+
             fetch(`${API_URL}/${task._id}`, { method: "DELETE" })
-                .then(res => res.json())
-                .then(() => loadTasksFromServer())
                 .catch(err => console.log(err));
         });
 
         taskList.appendChild(taskCard);
     });
 
+    calculateStats();
+}
+
+// 📊 Statistics Calculation
+function calculateStats() {
     const totalCount = tasks.length;
     const completedCount = tasks.filter(task => task.completed).length;
 
@@ -111,7 +140,7 @@ function renderTask() {
     updateProgressBar(completedCount, totalCount);
 }
 
-// 5. Progress Bar Logic
+// Progress Bar Logic
 function updateProgressBar(completed, total) {
     const progressBar = document.getElementById("progress-fill");
     if (!progressBar) return;
@@ -128,19 +157,17 @@ taskInput.addEventListener("keypress", (e) => {
     if (e.key === 'Enter') addTask();
 });
 
-// 8. Send PUT Request to save check state permanently in MongoDB
+// Send PUT Request (Background execution without reload lag)
 function toggleTaskOnServer(id, isChecked) {
     fetch(`${API_URL}/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ completed: isChecked })
     })
-        .then(res => res.json())
-        .then(() => loadTasksFromServer())
         .catch(err => console.log(err));
 }
 
-// 9. Filter Buttons Logic
+// Filter Buttons Logic
 document.querySelectorAll(".filter-btn").forEach(button => {
     button.addEventListener("click", () => {
         const category = button.getAttribute("data-category");
@@ -151,7 +178,7 @@ document.querySelectorAll(".filter-btn").forEach(button => {
     });
 });
 
-// 10. Fetch Data From Server
+// Fetch Data From Server
 function loadTasksFromServer() {
     fetch(API_URL)
         .then(res => res.json())
@@ -162,4 +189,8 @@ function loadTasksFromServer() {
         .catch(error => console.log(error));
 }
 
-window.onload = loadTasksFromServer;
+// Onload setup
+window.onload = () => {
+    loadTasksFromServer();
+    updateLiveDate(); // Live date running setup
+};

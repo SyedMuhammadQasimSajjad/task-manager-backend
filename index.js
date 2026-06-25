@@ -1,11 +1,11 @@
 const taskInput = document.querySelector("#task-input");
 const addtaskbtn = document.querySelector("#add-task-button");
 const taskList = document.querySelector("#task-list");
+const closeModalBtn = document.querySelector("#close-modal");
 let tasks = [];
 let currentFilter = 'all';
 let pendingTaskText = "";
 
-// 🔗 RELATIVE URL: Jab frontend/backend aik hi jagah hon, toh localhost ya live url likhne ki zaroorat nahi hoti!
 const API_URL = "/api/tasks";
 
 // 1. Add Task Button logic
@@ -20,6 +20,12 @@ function addTask() {
     document.getElementById("priority-modal").style.display = "flex";
 }
 
+if(closeModalBtn) {
+    closeModalBtn.addEventListener("click", () => {
+        document.getElementById("priority-modal").style.display = "none";
+    });
+}
+
 // 2. Priority buttons trigger
 document.querySelectorAll(".p-btn").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -32,7 +38,8 @@ document.querySelectorAll(".p-btn").forEach(btn => {
 function finalizeTask(priority) {
     const taskData = {
         title: pendingTaskText,
-        priority: priority
+        priority: priority,
+        completed: false
     };
     fetch(API_URL, {
         method: "POST",
@@ -43,7 +50,6 @@ function finalizeTask(priority) {
     })
         .then(res => res.json())
         .then(data => {
-            console.log("Server ka answer:", data);
             loadTasksFromServer();
             document.getElementById("priority-modal").style.display = "none";
             taskInput.value = "";
@@ -56,33 +62,25 @@ function finalizeTask(priority) {
 function renderTask() {
     taskList.innerHTML = "";
     const filteredTasks = tasks.filter(task => {
-        if (currentFilter === 'all') {
-            return true;
-        }
-        if (currentFilter === 'completed-list') {
-            return task.completed;
-        }
+        if (currentFilter === 'all') return true;
+        if (currentFilter === 'completed-list') return task.completed;
         return task.priority === currentFilter;
     });
+
     filteredTasks.forEach((task) => {
         const taskCard = document.createElement("div");
         taskCard.classList.add("task-card");
-        if (task.priority) {
-            taskCard.classList.add(task.priority);
-        }
-        if (task.completed) {
-            taskCard.classList.add("completed");
-        }
-        // ⚡ MongoDB ki ID _id hoti hai, isliye data-id="task._id" use kiya hai!
+        if (task.priority) taskCard.classList.add(task.priority);
+        if (task.completed) taskCard.classList.add("completed");
+
         taskCard.innerHTML = `
-<input type="checkbox" class="task-check" data-id="${task._id}" ${task.completed ? 'checked' : ''}>
-<span class="task-title"> ${task.title}</span>
-<i class="fa-solid fa-trash delete-icon" data-id="${task._id}"></i>
-`;
+            <input type="checkbox" class="task-check" data-id="${task._id}" ${task.completed ? 'checked' : ''}>
+            <span class="task-title"> ${task.title}</span>
+            <i class="fa-solid fa-trash delete-icon" data-id="${task._id}"></i>
+        `;
         taskList.appendChild(taskCard);
     });
 
-    // Count aur Progress Bar
     const totalCount = tasks.length;
     const completedCount = tasks.filter(task => task.completed).length;
 
@@ -99,9 +97,7 @@ function renderTask() {
 // 5. Progress Bar Logic
 function updateProgressBar(completed, total) {
     const progressBar = document.getElementById("progress-fill");
-    if (!progressBar) {
-        return;
-    }
+    if (!progressBar) return;
     if (total === 0) {
         progressBar.style.width = "0%";
         return;
@@ -110,46 +106,40 @@ function updateProgressBar(completed, total) {
     progressBar.style.width = percentage + "%";
 }
 
-// 6. Handle Clicks inside Task List (Trash & Checkbox both)
+// 6. Handle Clicks inside Task List
 taskList.addEventListener("click", (e) => {
     // TRASH ICON CLICK
     if (e.target.classList.contains("delete-icon")) {
-        const id = e.target.getAttribute("data-id"); // MongoDB ID string hoti hai, Number() hata diya
-        fetch(`${API_URL}/${id}`, {
-            method: "DELETE"
-        })
+        const id = e.target.getAttribute("data-id");
+        fetch(`${API_URL}/${id}`, { method: "DELETE" })
             .then(res => res.json())
-            .then(data => {
-                console.log(data.message);
-                loadTasksFromServer();
-            })
+            .then(() => loadTasksFromServer())
             .catch(err => console.log(err));
     }
 
     // CHECKBOX CLICK
     if (e.target.classList.contains("task-check")) {
         const idToToggle = e.target.getAttribute("data-id");
-        toggleTask(idToToggle);
+        const isChecked = e.target.checked;
+        toggleTaskOnServer(idToToggle, isChecked);
     }
 });
 
-// 7. Input Events
 addtaskbtn.addEventListener("click", addTask);
 taskInput.addEventListener("keypress", (e) => {
-    if (e.key === 'Enter') {
-        addTask();
-    }
+    if (e.key === 'Enter') addTask();
 });
 
-// 8. Toggle Task Completion Status (Abhi ke liye local UI level par status badlega)
-function toggleTask(id) {
-    tasks = tasks.map(task => {
-        if (task._id === id) {
-            return { ...task, completed: !task.completed };
-        }
-        return task;
-    });
-    renderTask();
+// 8. 🛠️ Audit Fix: Send PUT Request to save check state permanently in MongoDB
+function toggleTaskOnServer(id, isChecked) {
+    fetch(`${API_URL}/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ completed: isChecked })
+    })
+        .then(res => res.json())
+        .then(() => loadTasksFromServer())
+        .catch(err => console.log(err));
 }
 
 // 9. Filter Buttons Logic
@@ -168,12 +158,10 @@ function loadTasksFromServer() {
     fetch(API_URL)
         .then(res => res.json())
         .then(data => {
-            console.log("server sy aya hua data", data);
             tasks = data;
             renderTask();
         })
         .catch(error => console.log(error));
 }
 
-// 11. Initial Onload Trigger
 window.onload = loadTasksFromServer;
